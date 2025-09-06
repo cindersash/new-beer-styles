@@ -10,6 +10,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from typing import List, TypedDict
 
+import requests
 from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
@@ -232,6 +233,8 @@ def main() -> None:
     current_date = datetime.now().strftime("%Y-%m-%d")
     send_email(f"{len(matching_beers)} New Beer Styles - {current_date}", beer_list)
 
+    healthcheck_url = config.get("healthcheck_url")
+    requests.get(healthcheck_url)
     print("\nDone!")
 
 
