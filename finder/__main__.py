@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import platform
 import random
 import smtplib
 import time
@@ -41,27 +42,46 @@ def load_config() -> dict:
 
 
 def setup_driver() -> WebDriver:
-    """Set up and return a configured Chrome WebDriver"""
+    """Setup Chrome WebDriver with anti-detection options"""
     chrome_options = Options()
-    chrome_options.add_argument("--headless")  # Run in headless mode
+
+    # Headless mode (using newer syntax for better compatibility)
+    chrome_options.add_argument("--headless=new")
     chrome_options.add_argument("--disable-gpu")
-    chrome_options.add_argument("--window-size=1920,1080")
-    chrome_options.add_argument("--disable-extensions")
-    chrome_options.add_argument("--proxy-server='direct://'")
-    chrome_options.add_argument("--proxy-bypass-list=*")
-    chrome_options.add_argument("--start-maximized")
-    chrome_options.add_argument('--disable-blink-features=AutomationControlled')
-    chrome_options.add_argument('--disable-dev-shm-usage')
-    chrome_options.add_argument('--no-sandbox')
 
-    # Add a user agent
-    user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-    chrome_options.add_argument(f'user-agent={user_agent}')
+    # Anti-detection options
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+    chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    chrome_options.add_experimental_option('useAutomationExtension', False)
 
-    service = Service(ChromeDriverManager().install())
-    driver = webdriver.Chrome(service=service, options=chrome_options)
+    # User agent
+    user_agents = [
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0',
+    ]
+    chrome_options.add_argument(f"--user-agent={random.choice(user_agents)}")
 
-    return driver
+    try:
+        if platform.system() == "Windows":
+            service = Service(ChromeDriverManager().install())
+        else:
+            # Use a fixed path for non-Windows systems because it will install x64 which doesn't work on raspberry pi
+            service = Service("/usr/bin/chromedriver")
+        web_driver = webdriver.Chrome(service=service, options=chrome_options)
+
+        # Execute script to remove webdriver property
+        web_driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+
+        return web_driver
+
+    except Exception as e:
+        print(f"Failed to setup Chrome WebDriver: {e}")
+        print("Make sure Chrome browser and ChromeDriver are installed on your system")
+        print("For Raspberry Pi: sudo apt-get install chromium-browser chromium-chromedriver")
+        raise
 
 
 def get_beers_from_brewery(brewery_id: str) -> List[Beer]:
