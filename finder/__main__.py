@@ -79,39 +79,23 @@ def get_beers_from_brewery(brewery_id: str) -> List[Beer]:
             EC.presence_of_element_located((By.CSS_SELECTOR, "div[class*='beer-item']"))
         )
 
-        # Add some human-like delay
-        time.sleep(3)
-
-        # Scroll to load more content if needed
-        last_height = driver.execute_script("return document.body.scrollHeight")
-        while True:
-            driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-            time.sleep(2)  # Wait to load
-            new_height = driver.execute_script("return document.body.scrollHeight")
-            if new_height == last_height:
-                break
-            last_height = new_height
-
         # Get the page source and parse with BeautifulSoup
         soup = BeautifulSoup(driver.page_source, 'html.parser')
+
+        brewery_card = soup.select_one('div[class*="name"]')
+        brewery_name = brewery_card.select_one('h1').get_text(strip=True)
 
         beers = []
         beer_cards = soup.select('div[class*="beer-item"]')
 
         for card in beer_cards:
             try:
-                name_elem = card.select_one('p[class*="beer-name"]')
+                name_elem = card.select_one('p[class*="name"]')
                 style_elem = card.select_one('p[class*="style"]')
 
                 if name_elem and style_elem:
                     beer_name = name_elem.get_text(strip=True)
                     beer_style = style_elem.get_text(strip=True)
-
-                    # Get the brewery name from the page
-                    brewery_name_elem = card.select_one('p[class*="brewery"] a')
-                    if not brewery_name_elem:
-                        brewery_name_elem = soup.select_one('div.brewery a')
-                    brewery_name = brewery_name_elem.get_text(strip=True) if brewery_name_elem else "Unknown Brewery"
 
                     beers.append({
                         'name': beer_name,
