@@ -119,6 +119,8 @@ def find_matching_beers() -> List[Beer]:
     """Find beers that match the desired styles from config"""
     config = load_config()
     brewery_ids = config.get('brewery_ids', [])
+
+    # Don't worry about case
     desired_styles = [style.lower() for style in config.get('desired_styles', [])]
 
     matching_beers = []
