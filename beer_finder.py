@@ -1,7 +1,13 @@
 import json
-import requests
+import time
 from bs4 import BeautifulSoup
-from urllib.parse import urljoin
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from webdriver_manager.chrome import ChromeDriverManager
 
 def load_config():
     """Load configuration from config.json"""
@@ -15,17 +21,58 @@ def load_config():
         print("Error: config.json is not a valid JSON file.")
         exit(1)
 
+def setup_driver():
+    """Set up and return a configured Chrome WebDriver"""
+    chrome_options = Options()
+    chrome_options.add_argument("--headless")  # Run in headless mode
+    chrome_options.add_argument("--disable-gpu")
+    chrome_options.add_argument("--window-size=1920,1080")
+    chrome_options.add_argument("--disable-extensions")
+    chrome_options.add_argument("--proxy-server='direct://'")
+    chrome_options.add_argument("--proxy-bypass-list=*")
+    chrome_options.add_argument("--start-maximized")
+    chrome_options.add_argument('--disable-blink-features=AutomationControlled')
+    chrome_options.add_argument('--disable-dev-shm-usage')
+    chrome_options.add_argument('--no-sandbox')
+    
+    # Add a user agent
+    user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+    chrome_options.add_argument(f'user-agent={user_agent}')
+    
+    service = Service(ChromeDriverManager().install())
+    driver = webdriver.Chrome(service=service, options=chrome_options)
+    
+    return driver
+
 def get_beers_from_brewery(brewery_id):
-    """Scrape beer information from a brewery's Untappd page"""
+    """Scrape beer information from a brewery's Untappd page using Selenium"""
     base_url = f"https://untappd.com/w/{brewery_id}/beer?sort=created_at_desc"
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-    }
+    driver = None
     
     try:
-        response = requests.get(base_url, headers=headers)
-        response.raise_for_status()
-        soup = BeautifulSoup(response.text, 'html.parser')
+        driver = setup_driver()
+        driver.get(base_url)
+        
+        # Wait for the page to load and for beer items to be present
+        WebDriverWait(driver, 20).until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, "div[class*='beer-item']"))
+        )
+        
+        # Add some human-like delay
+        time.sleep(3)
+        
+        # Scroll to load more content if needed
+        last_height = driver.execute_script("return document.body.scrollHeight")
+        while True:
+            driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+            time.sleep(2)  # Wait to load
+            new_height = driver.execute_script("return document.body.scrollHeight")
+            if new_height == last_height:
+                break
+            last_height = new_height
+        
+        # Get the page source and parse with BeautifulSoup
+        soup = BeautifulSoup(driver.page_source, 'html.parser')
         
         beers = []
         beer_cards = soup.select('div[class*="beer-item"]')
@@ -40,7 +87,9 @@ def get_beers_from_brewery(brewery_id):
                     beer_style = style_elem.get_text(strip=True)
                     
                     # Get the brewery name from the page
-                    brewery_name_elem = soup.select_one('div.brewery a')
+                    brewery_name_elem = card.select_one('p[class*="brewery"] a')
+                    if not brewery_name_elem:
+                        brewery_name_elem = soup.select_one('div.brewery a')
                     brewery_name = brewery_name_elem.get_text(strip=True) if brewery_name_elem else "Unknown Brewery"
                     
                     beers.append({
@@ -54,9 +103,12 @@ def get_beers_from_brewery(brewery_id):
                 
         return beers
         
-    except requests.RequestException as e:
+    except Exception as e:
         print(f"Error fetching data from Untappd: {e}")
         return []
+    finally:
+        if driver:
+            driver.quit()
 
 def find_matching_beers():
     """Find beers that match the desired styles from config"""
