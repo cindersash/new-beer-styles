@@ -147,7 +147,7 @@ def find_matching_beers() -> List[Beer]:
 
     for brewery_id in brewery_ids:
         # Sleep between requests to avoid being detected as a bot
-        time.sleep(random.randint(1, 5))
+        time.sleep(random.uniform(5.0, 35.0))
         print(f"Checking beers from brewery: {brewery_id}")
         beers = get_beers_from_brewery(brewery_id)
         print(f"Found {len(beers)} beers from brewery {brewery_id}")
