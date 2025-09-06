@@ -1,17 +1,13 @@
 from __future__ import annotations
 
 import json
-import os
 import random
 import smtplib
 import time
 from datetime import datetime
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from pathlib import Path
 from typing import List, TypedDict
-
-from dotenv import load_dotenv
 
 from bs4 import BeautifulSoup
 from selenium import webdriver
@@ -148,7 +144,7 @@ def format_beer_list(beers: List[Beer]) -> str:
         if beer['brewery'] not in beers_by_brewery:
             beers_by_brewery[beer['brewery']] = []
         beers_by_brewery[beer['brewery']].append(beer)
-    
+
     result = []
     for brewery, brewery_beers in beers_by_brewery.items():
         result.append(f"{brewery}")
@@ -156,7 +152,7 @@ def format_beer_list(beers: List[Beer]) -> str:
         for beer in brewery_beers:
             result.append(f"{beer['name']} | {beer['style']}")
         result.append("")  # Add empty line between breweries
-    
+
     return "\n".join(result)
 
 
@@ -167,18 +163,18 @@ def send_email(subject: str, body: str) -> None:
     sender_email = email_config.get("sender")
     to_email = email_config.get("recipient")
     password = email_config.get("password")
-    
+
     if not all([sender_email, password, to_email]):
         print("Email configuration is incomplete. Please check your .env file.")
         return
-    
+
     msg = MIMEMultipart()
     msg['From'] = sender_email
     msg['To'] = to_email
     msg['Subject'] = subject
-    
+
     msg.attach(MIMEText(body, 'plain'))
-    
+
     try:
         with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
             server.login(sender_email, password)
@@ -193,7 +189,7 @@ def main() -> None:
 
     # Load configuration
     config = load_config()
-    
+
     # Find matching beers
     matching_beers = find_matching_beers()
 
@@ -203,17 +199,17 @@ def main() -> None:
 
     # Format the beer list for both console and email
     beer_list = format_beer_list(matching_beers)
-    
+
     # Print to console
     print("\nFound the following matching beers:")
     print("=" * 50)
     print(beer_list)
     print("\n" + "=" * 50)
-    
+
     # Send email
     current_date = datetime.now().strftime("%Y-%m-%d")
     send_email(f"{len(matching_beers)} New Beer Styles - {current_date}", beer_list)
-    
+
     print("\nDone!")
 
 
