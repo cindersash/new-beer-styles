@@ -144,13 +144,23 @@ def main() -> None:
         print("No matching beers found.")
         return
 
+    # Group beers by brewery
+    beers_by_brewery = {}
+    for beer in matching_beers:
+        if beer['brewery'] not in beers_by_brewery:
+            beers_by_brewery[beer['brewery']] = []
+        beers_by_brewery[beer['brewery']].append(beer)
+
     print("\nFound the following matching beers:")
-    print("-" * 50)
-    for i, beer in enumerate(matching_beers, 1):
-        print(f"{i}. {beer['name']}")
-        print(f"   Style: {beer['style']}")
-        print(f"   Brewery: {beer['brewery']}")
-        print("-" * 50)
+    print("=" * 50)
+    
+    for brewery, beers in beers_by_brewery.items():
+        print(f"\n{brewery}")
+        print("-" * len(brewery))
+        for beer in beers:
+            print(f"{beer['name']} | {beer['style']}")
+    
+    print("\n" + "=" * 50)
 
 
 if __name__ == "__main__":
