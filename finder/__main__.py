@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import random
 import time
 from typing import List, TypedDict
 
@@ -67,7 +68,7 @@ def setup_driver() -> WebDriver:
 
 def get_beers_from_brewery(brewery_id: str) -> List[Beer]:
     """Scrape beer information from a brewery's Untappd page using Selenium"""
-    base_url = f"https://untappd.com/w/{brewery_id}/beer?sort=created_at_desc"
+    base_url = f"https://untappd.com/{brewery_id}/beer?sort=created_at_desc"
     driver = None
 
     try:
@@ -125,8 +126,11 @@ def find_matching_beers() -> List[Beer]:
     matching_beers = []
 
     for brewery_id in brewery_ids:
+        # Sleep between requests to avoid being detected as a bot
+        time.sleep(random.randint(1, 5))
         print(f"Checking beers from brewery: {brewery_id}")
         beers = get_beers_from_brewery(brewery_id)
+        print(f"Found {len(beers)} beers from brewery {brewery_id}")
 
         for beer in beers:
             if any(style in beer['style'].lower() for style in desired_styles):
