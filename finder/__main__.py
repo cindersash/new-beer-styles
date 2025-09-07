@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import platform
 import random
 import smtplib
@@ -8,7 +9,8 @@ import time
 from datetime import datetime
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from typing import List, TypedDict
+from pathlib import Path
+from typing import List, TypedDict, Dict, Set, Optional
 
 import requests
 from bs4 import BeautifulSoup
@@ -27,6 +29,35 @@ class Beer(TypedDict):
     name: str
     style: str
     brewery: str
+    brewery_id: str
+
+
+def load_sent_beers() -> Dict[str, Set[str]]:
+    """Load the set of already sent beer names for each brewery."""
+    try:
+        with open('sent_beers.json', 'r') as f:
+            data = json.load(f)
+            # Convert lists back to sets
+            return {brewery_id: set(beers) for brewery_id, beers in data.items()}
+    except FileNotFoundError:
+        return {}
+
+
+def save_sent_beers(sent_beers: Dict[str, Set[str]]) -> None:
+    """Save the set of sent beer names for each brewery to a file."""
+    # Convert sets to lists for JSON serialization
+    data = {brewery_id: list(beers) for brewery_id, beers in sent_beers.items()}
+    with open('sent_beers.json', 'w') as f:
+        json.dump(data, f, indent=2)
+
+
+def filter_new_beers(beers: List[Beer], sent_beers: Dict[str, Set[str]], brewery_id: str) -> List[Beer]:
+    """Filter out beers that have already been sent."""
+    new_beers = []
+    for beer in beers:
+        if beer['name'] not in sent_beers.get(brewery_id, set()):
+            new_beers.append(beer)
+    return new_beers
 
 
 def load_config() -> dict:
@@ -120,7 +151,8 @@ def get_beers_from_brewery(brewery_id: str) -> List[Beer]:
                     beers.append({
                         'name': beer_name,
                         'style': beer_style,
-                        'brewery': brewery_name
+                        'brewery': brewery_name,
+                        'brewery_id': brewery_id
                     })
             except Exception as e:
                 print(f"Error parsing beer card: {e}")
@@ -143,8 +175,10 @@ def find_matching_beers() -> List[Beer]:
 
     # Don't worry about case
     desired_styles = [style.lower() for style in config.get('desired_styles', [])]
-
-    matching_beers = []
+    
+    # Load previously sent beers
+    sent_beers = load_sent_beers()
+    new_beers = []
 
     for brewery_id in brewery_ids:
         # Sleep between requests to avoid being detected as a bot
@@ -153,11 +187,27 @@ def find_matching_beers() -> List[Beer]:
         beers = get_beers_from_brewery(brewery_id)
         print(f"Found {len(beers)} beers from brewery {brewery_id}")
 
+        # Filter for matching styles and new beers
+        matching_beers = []
         for beer in beers:
             if any(style in beer['style'].lower() for style in desired_styles):
                 matching_beers.append(beer)
-
-    return matching_beers
+        
+        # Filter out already sent beers
+        new_brewery_beers = filter_new_beers(matching_beers, sent_beers, brewery_id)
+        new_beers.extend(new_brewery_beers)
+        
+        # Update sent_beers with new beers
+        if new_brewery_beers:
+            if brewery_id not in sent_beers:
+                sent_beers[brewery_id] = set()
+            sent_beers[brewery_id].update(beer['name'] for beer in new_brewery_beers)
+    
+    # Save the updated sent_beers to disk
+    if new_beers:
+        save_sent_beers(sent_beers)
+    
+    return new_beers
 
 
 def format_beer_list(beers: List[Beer]) -> str:
