@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 import platform
 import random
 import smtplib
@@ -9,8 +8,7 @@ import time
 from datetime import datetime
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from pathlib import Path
-from typing import List, TypedDict, Dict, Set, Optional
+from typing import List, TypedDict, Dict, Set
 
 import requests
 from bs4 import BeautifulSoup
@@ -175,7 +173,7 @@ def find_matching_beers() -> List[Beer]:
 
     # Don't worry about case
     desired_styles = [style.lower() for style in config.get('desired_styles', [])]
-    
+
     # Load previously sent beers
     sent_beers = load_sent_beers()
     new_beers = []
@@ -192,21 +190,21 @@ def find_matching_beers() -> List[Beer]:
         for beer in beers:
             if any(style in beer['style'].lower() for style in desired_styles):
                 matching_beers.append(beer)
-        
+
         # Filter out already sent beers
         new_brewery_beers = filter_new_beers(matching_beers, sent_beers, brewery_id)
         new_beers.extend(new_brewery_beers)
-        
+
         # Update sent_beers with new beers
         if new_brewery_beers:
             if brewery_id not in sent_beers:
                 sent_beers[brewery_id] = set()
             sent_beers[brewery_id].update(beer['name'] for beer in new_brewery_beers)
-    
+
     # Save the updated sent_beers to disk
     if new_beers:
         save_sent_beers(sent_beers)
-    
+
     return new_beers
 
 
@@ -255,13 +253,11 @@ def send_email(subject: str, body: str) -> None:
         print("\nEmail sent successfully!")
     except Exception as e:
         print(f"\nError sending email: {e}")
+        raise e
 
 
-def main() -> None:
+def _process():
     print("Searching for beers that match your desired styles...\n")
-
-    # Load configuration
-    config = load_config()
 
     # Find matching beers
     matching_beers = find_matching_beers()
@@ -283,8 +279,14 @@ def main() -> None:
     current_date = datetime.now().strftime("%Y-%m-%d")
     send_email(f"{len(matching_beers)} New Beer Styles - {current_date}", beer_list)
 
+
+def main() -> None:
+    _process()
+
+    config = load_config()
     healthcheck_url = config.get("healthcheck_url")
-    requests.get(healthcheck_url)
+    response = requests.get(healthcheck_url)
+    response.raise_for_status()
     print("\nDone!")
 
 
