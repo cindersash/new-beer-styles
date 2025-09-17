@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import logging
 import logging.handlers
-import os
 import platform
 import random
 import smtplib
@@ -292,38 +291,38 @@ def setup_logging() -> logging.Logger:
     # Create logs directory if it doesn't exist
     log_dir = Path('logs')
     log_dir.mkdir(exist_ok=True)
-    
+
     # Create a logger
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
-    
+
     # Create formatter
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    
+
     # Console handler
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setFormatter(formatter)
-    
+
     # File handler (single file, no rotation)
     file_handler = logging.FileHandler(log_dir / 'beer_finder.log', mode='a')
     file_handler.setFormatter(formatter)
-    
+
     # Add handlers to logger
     logger.addHandler(console_handler)
     logger.addHandler(file_handler)
-    
+
     return logger
 
 
 def main() -> None:
     # Setup logging
     logger = setup_logging()
-    
+
     try:
         _process()
         config = load_config()
         healthcheck_url = config.get("healthcheck_url")
-        
+
         if healthcheck_url:
             logger.info("Sending healthcheck ping...")
             response = requests.get(healthcheck_url)
@@ -331,7 +330,7 @@ def main() -> None:
             logger.info("Healthcheck successful")
         else:
             logger.warning("No healthcheck URL configured")
-            
+
         logger.info("Script completed successfully")
     except Exception as e:
         logger.error(f"An error occurred: {str(e)}", exc_info=True)
