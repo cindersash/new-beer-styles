@@ -184,7 +184,9 @@ def find_matching_beers() -> List[Beer]:
 
     for brewery_id in brewery_ids:
         # Sleep between requests to avoid being detected as a bot
-        time.sleep(random.uniform(5.0, 35.0))
+        sleep_time = random.uniform(5.0, 35.0)
+        logging.info(f"Sleeping for {sleep_time:.2f} seconds before checking brewery: {brewery_id}")
+        time.sleep(sleep_time)
         logging.info(f"Checking beers from brewery: {brewery_id}")
         beers = get_beers_from_brewery(brewery_id)
         logging.info(f"Found {len(beers)} beers from brewery {brewery_id}")
@@ -291,6 +293,9 @@ def setup_logging() -> logging.Logger:
     # Create logs directory if it doesn't exist
     log_dir = Path('logs')
     log_dir.mkdir(exist_ok=True)
+
+    # Set WDM logger to WARNING level to reduce verbosity
+    logging.getLogger('WDM').setLevel(logging.WARNING)
 
     # Create a logger
     logger = logging.getLogger()
