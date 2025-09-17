@@ -1,13 +1,18 @@
 from __future__ import annotations
 
 import json
+import logging
+import logging.handlers
+import os
 import platform
 import random
 import smtplib
+import sys
 import time
 from datetime import datetime
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from pathlib import Path
 from typing import List, TypedDict, Dict, Set
 
 import requests
@@ -64,10 +69,10 @@ def load_config() -> dict:
         with open('config.json', 'r') as f:
             return json.load(f)
     except FileNotFoundError:
-        print("Error: config.json not found. Please make sure it exists in the root directory.")
+        logging.error("config.json not found. Please make sure it exists in the root directory.")
         exit(1)
     except json.JSONDecodeError:
-        print("Error: config.json is not a valid JSON file.")
+        logging.error("config.json is not a valid JSON file.")
         exit(1)
 
 
@@ -108,9 +113,9 @@ def setup_driver() -> WebDriver:
         return web_driver
 
     except Exception as e:
-        print(f"Failed to setup Chrome WebDriver: {e}")
-        print("Make sure Chrome browser and ChromeDriver are installed on your system")
-        print("For Raspberry Pi: sudo apt-get install chromium-browser chromium-chromedriver")
+        logging.error(f"Failed to setup Chrome WebDriver: {e}")
+        logging.error("Make sure Chrome browser and ChromeDriver are installed on your system")
+        logging.error("For Raspberry Pi: sudo apt-get install chromium-browser chromium-chromedriver")
         raise
 
 
@@ -153,13 +158,13 @@ def get_beers_from_brewery(brewery_id: str) -> List[Beer]:
                         'brewery_id': brewery_id
                     })
             except Exception as e:
-                print(f"Error parsing beer card: {e}")
+                logging.warning(f"Error parsing beer card: {e}")
                 continue
 
         return beers
 
     except Exception as e:
-        print(f"Error fetching data from Untappd: {e}")
+        logging.error(f"Error fetching data from Untappd: {e}", exc_info=True)
         return []
     finally:
         if driver:
@@ -181,9 +186,9 @@ def find_matching_beers() -> List[Beer]:
     for brewery_id in brewery_ids:
         # Sleep between requests to avoid being detected as a bot
         time.sleep(random.uniform(5.0, 35.0))
-        print(f"Checking beers from brewery: {brewery_id}")
+        logging.info(f"Checking beers from brewery: {brewery_id}")
         beers = get_beers_from_brewery(brewery_id)
-        print(f"Found {len(beers)} beers from brewery {brewery_id}")
+        logging.info(f"Found {len(beers)} beers from brewery {brewery_id}")
 
         # Filter for matching styles and new beers
         matching_beers = []
@@ -236,7 +241,7 @@ def send_email(subject: str, body: str) -> None:
     password = email_config.get("password")
 
     if not all([sender_email, password, to_email]):
-        print("Email configuration is incomplete. Please check your .env file.")
+        logging.error("Email configuration is incomplete. Please check your config.json file.")
         return
 
     msg = MIMEMultipart()
@@ -250,44 +255,87 @@ def send_email(subject: str, body: str) -> None:
         with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
             server.login(sender_email, password)
             server.send_message(msg)
-        print("\nEmail sent successfully!")
+        logging.info("Email notification sent successfully")
     except Exception as e:
-        print(f"\nError sending email: {e}")
+        logging.error(f"Error sending email: {e}", exc_info=True)
         raise e
 
 
 def _process():
-    print("Searching for beers that match your desired styles...\n")
+    logging.info("Searching for beers that match your desired styles...")
 
     # Find matching beers
     matching_beers = find_matching_beers()
 
     if not matching_beers:
-        print("No matching beers found.")
+        logging.info("No matching beers found.")
         return
 
     # Format the beer list for both console and email
     beer_list = format_beer_list(matching_beers)
 
-    # Print to console
-    print("\nFound the following matching beers:")
-    print("=" * 50)
-    print(beer_list)
-    print("\n" + "=" * 50)
+    # Log the found beers
+    logging.info("\nFound the following matching beers:")
+    logging.info("=" * 50)
+    for line in beer_list.split('\n'):
+        if line.strip() and '|' in line:
+            logging.info(line.strip())
+    logging.info("=" * 50)
 
     # Send email
     current_date = datetime.now().strftime("%Y-%m-%d")
     send_email(f"{len(matching_beers)} New Beer Styles - {current_date}", beer_list)
 
 
-def main() -> None:
-    _process()
+def setup_logging() -> logging.Logger:
+    """Configure logging to output to both console and a file."""
+    # Create logs directory if it doesn't exist
+    log_dir = Path('logs')
+    log_dir.mkdir(exist_ok=True)
+    
+    # Create a logger
+    logger = logging.getLogger()
+    logger.setLevel(logging.INFO)
+    
+    # Create formatter
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    
+    # Console handler
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setFormatter(formatter)
+    
+    # File handler (single file, no rotation)
+    file_handler = logging.FileHandler(log_dir / 'beer_finder.log', mode='a')
+    file_handler.setFormatter(formatter)
+    
+    # Add handlers to logger
+    logger.addHandler(console_handler)
+    logger.addHandler(file_handler)
+    
+    return logger
 
-    config = load_config()
-    healthcheck_url = config.get("healthcheck_url")
-    response = requests.get(healthcheck_url)
-    response.raise_for_status()
-    print("\nDone!")
+
+def main() -> None:
+    # Setup logging
+    logger = setup_logging()
+    
+    try:
+        _process()
+        config = load_config()
+        healthcheck_url = config.get("healthcheck_url")
+        
+        if healthcheck_url:
+            logger.info("Sending healthcheck ping...")
+            response = requests.get(healthcheck_url)
+            response.raise_for_status()
+            logger.info("Healthcheck successful")
+        else:
+            logger.warning("No healthcheck URL configured")
+            
+        logger.info("Script completed successfully")
+    except Exception as e:
+        logger.error(f"An error occurred: {str(e)}", exc_info=True)
+        raise
 
 
 if __name__ == "__main__":

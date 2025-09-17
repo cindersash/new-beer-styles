@@ -3,3 +3,4 @@ venv/
 __pycache__
 config.json
 sent_beers.json
+logs/
